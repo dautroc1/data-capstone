@@ -1,0 +1,304 @@
+---
+title: "Report"
+output: html_document
+---
+##  **Data**
+The data come from blog, twitter, news... in English  
+##  **Data loading**
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+library(tm)
+library(ggplot2)
+library(wordcloud)
+library(tokenizers)
+library(SnowballC)
+library(markovchain)
+library(tidyr)
+library(stringr)
+library(qdapDictionaries)
+library(RCurl)
+#create data directory
+
+if(!file.exists('train')){
+  dir.create("train")
+}
+#download
+
+# url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+# download(url, dest="dataset.zip", mode="wb") 
+# unzip ("dataset.zip", exdir = "./train")
+dirnew <- "./train/final/en_US/en_US.news.txt"
+dirblog <- "./train/final/en_US/en_US.blogs.txt"
+dirtwitter <- "./train/final/en_US/en_US.twitter.txt"
+dirpro <- "./train/final/en_US/list.txt"
+
+```
+
+```{r,warning = FALSE, message=FALSE}
+news <- readLines(dirnew)
+lennews <- length(news)
+blog <- readLines(dirblog)
+lenblog <- length(blog)
+twit <- readLines(dirtwitter)
+lentwit <- length(twit)
+```
+
+## **Sampling**
+
+We create a random sample from the data
+
+```{r}
+set.seed(2020)
+prop <- 0.05
+lennews <- lennews * prop
+news <- sample(news,lennews)
+lenblog <- lenblog * prop
+blog <- sample(blog, lenblog)
+lentwit <- lentwit * prop
+twit <- sample(twit, lentwit)
+train <- c(news, blog, twit)
+```
+
+## **Data cleaning**
+
+We remove white space, number, stop words in English, profanity words, word contain "http", and not ascii object.
+
+```{r}
+train <- iconv(train, to = "utf-8")
+#save sample
+
+dat2 <- unlist(strsplit(train, split=", "))
+# find indices of words with non-ASCII characters
+dat3 <- grep("dat2", iconv(dat2, "latin1", "ASCII", sub="dat2"))
+# subset original vector of words to exclude words with non-ASCII char
+dat4 <- dat2[-dat3]
+# convert vector back to a string
+train <- paste(dat4, collapse = ", ")
+
+writeLines(train, "./train/final/en_US/en_US.train.txt")
+
+#preprocess data
+train <- gsub("(f|ht)tp(s?)://(.*)[.][a-z]+","",train)
+profanity <- readLines(dirpro)
+ 
+text_corpus <- (VectorSource(train))
+text_corpus <- VCorpus(text_corpus)
+
+text_corpus_clean<-tm_map(text_corpus , content_transformer(tolower))
+text_corpus_clean <- tm_map(text_corpus_clean, removePunctuation)
+text_corpus_clean <- tm_map(text_corpus_clean, removeNumbers)
+#text_corpus_clean <- tm_map(text_corpus_clean, stripWhitespace)
+
+text_corpus_clean <- tm_map(text_corpus_clean, removeWords, stopwords("english"))
+text_corpus_clean <- tm_map(text_corpus_clean, removeWords, profanity)
+
+
+
+data(GradyAugmented)
+tdm <- TermDocumentMatrix(text_corpus_clean )
+all_tokens       <- findFreqTerms(tdm, 1)
+tokens_to_remove <- setdiff(all_tokens,GradyAugmented)
+text_corpus_clean <- tm_map(text_corpus_clean, content_transformer(removeWords), 
+                 tokens_to_remove)
+text_corpus_clean <- tm_map(text_corpus_clean, stripWhitespace)
+```
+## **Exploratory analysis**
+
+We create the document term matrix and use wordcloud and plot to visualize data.
+
+1 word  
+```{r, echo = FALSE,warning = FALSE}
+Unigramtokenizer <- function(x)
+  unlist(lapply(ngrams(words(x), 1), paste, collapse = " "), use.names = FALSE)
+Bigramtokenizer <- function(x)
+  unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+Trigramtokenizer <-function(x)
+  unlist(lapply(ngrams(words(x), 3), paste, collapse = " "), use.names = FALSE)
+dtm <- DocumentTermMatrix(text_corpus_clean, control = list(tokenize = Unigramtokenizer))
+
+dtms <- removeSparseTerms(dtm, 0.99)
+dtms
+freq <- colSums(as.matrix(dtms))   
+freq <- sort(freq, decreasing = TRUE)
+temp <- cumsum(freq)
+s <- sum(freq)
+temp <- temp/s
+temp1 <- which(temp > 0.9)
+"Number of words to coverage 90%"
+length(freq) - length(temp1)
+
+o <- order(freq,decreasing = TRUE)
+name <- factor(names(freq), levels = names(freq[o]))
+cov90 <- data.frame("frequent" = freq,"word"= name)
+cov90 <- head(cov90, 10)
+g <- ggplot(data= cov90,aes(x = frequent, y = word,)) + geom_col(color='darkblue') + labs(title = "Top 10 most frequent word")
+g
+wordcloud(words = names(head(freq,40)),colors = brewer.pal(6, 'Dark2'), freq = head(freq,40),random.order = FALSE)
+top5 <- head(names(freq), n = 5)
+```
+
+2 words  
+```{r, echo = FALSE,warning = FALSE}
+dtm_bigram <- DocumentTermMatrix(text_corpus_clean, control = list(tokenize = Bigramtokenizer))
+dtm_bigrams <- removeSparseTerms(dtm_bigram, 0.999)
+dtm_bigrams
+freq <- colSums(as.matrix(dtm_bigrams))   
+freq <- sort(freq, decreasing = TRUE)
+temp <- cumsum(freq)
+s <- sum(freq)
+temp <- temp/s
+temp1 <- which(temp > 0.9)
+"Number of words to coverage 90%"
+length(freq) - length(temp1)
+
+o <- order(freq,decreasing = TRUE)
+name <- factor(names(freq), levels = names(freq[o]))
+cov90 <- data.frame("frequent" = freq,"word"= name)
+cov90 <- head(cov90, 10)
+g <- ggplot(data= cov90,aes(x = frequent, y = word,)) + geom_col(color='darkblue') + labs(title = "Top 10 most frequent word")
+g
+
+wordcloud(words = names(freq),freq = freq,random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"),min.freq = 1,max.words=200
+          ,scale=c(3,0.22))
+```
+
+3 words  
+```{r, echo = FALSE,warning = FALSE}
+dtm_trigram <- DocumentTermMatrix(text_corpus_clean, control = list(tokenize = Trigramtokenizer))
+dtm_trigrams <- removeSparseTerms(dtm_trigram, 0.999)
+dtm_trigrams
+freq <- colSums(as.matrix(dtm_trigrams))   
+freq <- sort(freq, decreasing = TRUE)
+temp <- cumsum(freq)
+s <- sum(freq)
+temp <- temp/s
+temp1 <- which(temp > 0.9)
+"Number of words to coverage 90%"
+length(freq) - length(temp1)
+
+o <- order(freq,decreasing = TRUE)
+name <- factor(names(freq), levels = names(freq[o]))
+cov90 <- data.frame("frequent" = freq,"word"= name)
+cov90 <- head(cov90, 10)
+g <- ggplot(data= cov90,aes(x = frequent, y = word,)) + geom_col(color='darkblue') + labs(title = "Top 10 most frequent word")
+g
+wordcloud(words = names(freq),freq = freq,random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"),min.freq = 1,max.words=200
+          ,scale=c(1.8,0.6))
+```
+
+##  **Model**
+We use markov chain model. We create transition matrix and fit the model. Firstly, we use 3 grams to predict. If model failed to output a result, we use 2 grams and 1 gram model. If the 1 gram model still failed, we use the most popular word to output.
+
+```{r, warning=FALSE,eval = FALSE}
+unitext <- d %>% 
+  strsplit(" ") %>% 
+  unlist()
+bigram <- data.frame("text" = d) 
+bigram <- bigram %>% 
+  head(100) %>% 
+  unnest_tokens(output=ngram,
+                input=text, 
+                token = "ngrams",
+                n = 2) %>%
+  pull(ngram)
+
+head(bigram)
+
+trigram <- data.frame("text" = d) 
+trigram <- trigram %>% 
+  head(1000) %>% 
+  unnest_tokens(output=ngram,
+                input=text, 
+                token = "ngrams",
+                n = 3) %>%
+  pull(ngram)
+
+head(trigram)
+
+unitext %>% head(30)
+
+fit_markov <- markovchainFit(unitext)
+fit_markov_uni <- readRDS("uni.rds")
+fit_markov_bi <- readRDS("bigram.rds")
+fit_markov_tri <- readRDS("trigram.rds")
+'%ni%' <- Negate('%in%')
+predictive_text_uni <- function(text){
+  if(text %ni% names(fit_markov_uni$estimate))
+    return (FALSE)
+  suggest <- fit_markov_uni$estimate[ tolower(text), ] %>%
+    sort(decreasing = T) %>% 
+    head(5) 
+  suggest <- suggest[ suggest > 0] %>% 
+    names() %>% 
+    str_remove("[ ]")
+  
+  
+  return(suggest)
+}
+
+predictive_text_bi <- function(text){
+  if(text %ni% names(fit_markov_bi$estimate))
+    return (FALSE)
+  suggest <- fit_markov_bi$estimate[ tolower(text), ] %>%
+    sort(decreasing = T) %>% 
+    head(5) 
+  suggest <- suggest[ suggest > 0] %>% 
+    names() %>% 
+    str_remove("[ ]")
+  
+  
+  return(suggest)
+}
+
+predictive_text_tri <- function(text){
+  if(text %ni% names(fit_markov_tri$estimate))
+    return (FALSE)
+  suggest <- fit_markov_tri$estimate[ tolower(text), ] %>%
+    sort(decreasing = T) %>% 
+    head(5) 
+  suggest <- suggest[ suggest > 0] %>% 
+    names() %>% 
+    str_remove("[ ]")
+  
+  
+  return(suggest)
+}
+
+
+
+Predict <- function(text){
+  text <- tolower(text)
+  result <- TRUE
+  n <- str_count(text)
+  if (n >= 3)
+  {
+    temp <- paste(word(text,-3) ,word(text,-2) ,word(text,-1), sep = " ")
+    result <- predictive_text_tri(temp)
+    
+  }
+  print(result)
+  if (n == 2 | result == FALSE)
+  {
+    temp <- paste(word(text,-2) ,word(text,-1), sep = " ")
+    result <- predictive_text_bi(temp)
+  }
+  print(result)
+  if (n == 1 | result == FALSE)
+  {
+    temp <- paste(word(text,-1), sep = " ")
+    result <- predictive_text_uni(temp)
+  }
+  print(result)
+  if(result == FALSE)
+  {
+    return (top5)
+  }
+  else
+  {
+    return (result)
+  }
+  
+}
+```
+
+

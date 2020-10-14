@@ -1,0 +1,31 @@
+---
+title: "Presentation"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+---
+title: "Presentation"
+output: ioslides_presentation
+---
+
+
+
+## Problem
+
+Predict next word when we input  
+
+## Solution
+
+Use markov chain. Firstly, we use 3 grams to predict. If model failed to output a result, we use 2 grams and 1 gram model. If the 1 gram model still failed, we use the most popular word to output.
+
+
+
+## Introduction
+
+Input the data into the box.  
+The prediction will output the result below the box.  
+
