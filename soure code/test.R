@@ -1,12 +1,3 @@
----
-title: "Report"
-output: html_document
----
-##  **Data**
-The data come from blog, twitter, news... in English  
-
-##  **Data loading**
-```{r, echo = FALSE, warning=FALSE, message=FALSE}
 library(dplyr)
 library(tm)
 library(ggplot2)
@@ -32,23 +23,18 @@ dirnew <- "./train/final/en_US/en_US.news.txt"
 dirblog <- "./train/final/en_US/en_US.blogs.txt"
 dirtwitter <- "./train/final/en_US/en_US.twitter.txt"
 dirpro <- "./train/final/en_US/list.txt"
+#read file
 
-```
-
-```{r,warning = FALSE, message=FALSE}
 news <- readLines(dirnew)
 lennews <- length(news)
 blog <- readLines(dirblog)
 lenblog <- length(blog)
 twit <- readLines(dirtwitter)
 lentwit <- length(twit)
-```
 
-## **Sampling**
 
-We create a random sample from the data
 
-```{r}
+#sample
 set.seed(2020)
 prop <- 0.05
 lennews <- lennews * prop
@@ -58,13 +44,7 @@ blog <- sample(blog, lenblog)
 lentwit <- lentwit * prop
 twit <- sample(twit, lentwit)
 train <- c(news, blog, twit)
-```
-
-## **Data cleaning**
-
-We remove white space, number, stop words in English, profanity words, word contain "http", and not ascii object.
-
-```{r}
+#train <- iconv(train,"WINDOWS-1252","UTF-8")
 train <- iconv(train, to = "utf-8")
 #save sample
 
@@ -85,6 +65,10 @@ profanity <- readLines(dirpro)
 text_corpus <- (VectorSource(train))
 text_corpus <- VCorpus(text_corpus)
 
+
+
+
+
 text_corpus_clean<-tm_map(text_corpus , content_transformer(tolower))
 text_corpus_clean <- tm_map(text_corpus_clean, removePunctuation)
 text_corpus_clean <- tm_map(text_corpus_clean, removeNumbers)
@@ -102,19 +86,18 @@ tokens_to_remove <- setdiff(all_tokens,GradyAugmented)
 text_corpus_clean <- tm_map(text_corpus_clean, content_transformer(removeWords), 
                  tokens_to_remove)
 text_corpus_clean <- tm_map(text_corpus_clean, stripWhitespace)
-```
-## **Exploratory analysis**
 
-We create the document term matrix and use wordcloud and plot to visualize data.
+saveRDS(text_corpus_clean, "corpus.rds")
+#exploratory analysis
 
-1 word  
-```{r, echo = FALSE,warning = FALSE}
 Unigramtokenizer <- function(x)
   unlist(lapply(ngrams(words(x), 1), paste, collapse = " "), use.names = FALSE)
 Bigramtokenizer <- function(x)
   unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
 Trigramtokenizer <-function(x)
   unlist(lapply(ngrams(words(x), 3), paste, collapse = " "), use.names = FALSE)
+
+
 dtm <- DocumentTermMatrix(text_corpus_clean, control = list(tokenize = Unigramtokenizer))
 
 dtms <- removeSparseTerms(dtm, 0.99)
@@ -136,10 +119,30 @@ g <- ggplot(data= cov90,aes(x = frequent, y = word,)) + geom_col(color='darkblue
 g
 wordcloud(words = names(head(freq,40)),colors = brewer.pal(6, 'Dark2'), freq = head(freq,40),random.order = FALSE)
 top5 <- head(names(freq), n = 5)
-```
 
-2 words  
-```{r, echo = FALSE,warning = FALSE}
+
+
+dtm_trigram <- DocumentTermMatrix(text_corpus_clean, control = list(tokenize = Trigramtokenizer))
+dtm_trigrams <- removeSparseTerms(dtm_trigram, 0.999)
+dtm_bigrams
+freq <- colSums(as.matrix(dtm_trigrams))   
+freq <- sort(freq, decreasing = TRUE)
+temp <- cumsum(freq)
+s <- sum(freq)
+temp <- temp/s
+temp1 <- which(temp > 0.9)
+"Number of words to coverage 90%"
+length(freq) - length(temp1)
+
+o <- order(freq,decreasing = TRUE)
+name <- factor(names(freq), levels = names(freq[o]))
+cov90 <- data.frame("frequent" = freq,"word"= name)
+cov90 <- head(cov90, 10)
+g <- ggplot(data= cov90,aes(x = frequent, y = word,)) + geom_col(color='darkblue') + labs(title = "Top 10 most frequent word")
+g
+wordcloud(words = names(freq),freq = freq,random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"),min.freq = 1,max.words=200
+          ,scale=c(1.8,0.6))
+
 dtm_bigram <- DocumentTermMatrix(text_corpus_clean, control = list(tokenize = Bigramtokenizer))
 dtm_bigrams <- removeSparseTerms(dtm_bigram, 0.999)
 dtm_bigrams
@@ -161,36 +164,11 @@ g
 
 wordcloud(words = names(freq),freq = freq,random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"),min.freq = 1,max.words=200
           ,scale=c(3,0.22))
-```
 
-3 words  
-```{r, echo = FALSE,warning = FALSE}
-dtm_trigram <- DocumentTermMatrix(text_corpus_clean, control = list(tokenize = Trigramtokenizer))
-dtm_trigrams <- removeSparseTerms(dtm_trigram, 0.999)
-dtm_trigrams
-freq <- colSums(as.matrix(dtm_trigrams))   
-freq <- sort(freq, decreasing = TRUE)
-temp <- cumsum(freq)
-s <- sum(freq)
-temp <- temp/s
-temp1 <- which(temp > 0.9)
-"Number of words to coverage 90%"
-length(freq) - length(temp1)
 
-o <- order(freq,decreasing = TRUE)
-name <- factor(names(freq), levels = names(freq[o]))
-cov90 <- data.frame("frequent" = freq,"word"= name)
-cov90 <- head(cov90, 10)
-g <- ggplot(data= cov90,aes(x = frequent, y = word,)) + geom_col(color='darkblue') + labs(title = "Top 10 most frequent word")
-g
-wordcloud(words = names(freq),freq = freq,random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"),min.freq = 1,max.words=200
-          ,scale=c(1.8,0.6))
-```
 
-##  **Model**
-We use markov chain model. We create transition matrix and fit the model. Firstly, we use 3 grams to predict. If model failed to output a result, we use 2 grams and 1 gram model. If the 1 gram model still failed, we use the most popular word to output.
 
-```{r, warning=FALSE,eval = FALSE}
+
 unitext <- d %>% 
   strsplit(" ") %>% 
   unlist()
@@ -300,6 +278,3 @@ Predict <- function(text){
   }
   
 }
-```
-
-
